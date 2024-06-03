@@ -1,46 +1,29 @@
 
 
-// fn main() {
-//     let m = vec![vec![10., 15., 30., 10.],
-//                  vec![5., 10., 10., 5.],
-//                  vec![20., 20., 20., 20.],
-//                  vec![35., 10., 100., 200.]];
-//     let v = vec![vec![15.],
-//                  vec![20.],
-//                  vec![20.],
-//                  vec![25.]];
-//     // let mut mat = LinearSystem::new(m, v);
-//     // println!("Starting matrix: ");
-//     // mat.display();
-
-//     let sol = LinearSystem::least_squares(m, v);
-//     println!("Sol: ");
-//     // sol.display();
-//     println!("{:?}", sol);
-// }
-
 pub struct LinearSystem {
     matrix: Vec<Vec<f64>>
 }
 
-impl LinearSystem {
-    pub fn new(matrix_a: Vec<Vec<f64>>, vector_b: Vec<Vec<f64>>) -> Self {
-        let mut mat = matrix_a.clone();
-        for row in 0..mat.len() {
-            mat[row].push(vector_b[row][0]);
-        };
-        Self {matrix: mat}
-    }
+pub enum Matrix {
+    System(LinearSystem),
+    Vecs(Vec<Vec<f64>>),
+}
 
-    pub fn display(&self) {
-        let widths: Vec<usize> = (0..self.matrix[0].len())
-            .map(|i| self.matrix.iter()
+impl Matrix {
+    pub fn display(system: &Matrix) {
+        let matrix = match system {
+            Matrix::System(linear_system) => &linear_system.matrix,
+            Matrix::Vecs(vecs) => vecs,
+        };
+
+        let widths: Vec<usize> = (0..matrix[0].len())
+            .map(|i| matrix.iter()
                 .map(|row| format!("{:.2}", row[i]).len())
                 .max()
                 .unwrap_or(0))
             .collect();
     
-        for row in &self.matrix {
+        for row in matrix {
             print!("| "); // Start of row
             for (i, &num) in row.iter().enumerate() {
                 print!("{:width$.2} ", num, width = widths[i]);
@@ -48,6 +31,46 @@ impl LinearSystem {
             println!("|"); 
         }
     }
+}
+
+impl LinearSystem {
+    pub fn new(matrix_a: Vec<Vec<f64>>, vector_b: Vec<Vec<f64>>) -> Result<Self, &'static str> {
+        if matrix_a.len() != vector_b.len() {
+            return Err("matrix_a and vector_b must have the same number of rows")
+        }
+        let rows_a = matrix_a.len();
+        if !matrix_a.iter().all(|row| row.len() == rows_a) {
+            return Err("matrix_a must be square")
+        }
+
+        let mut mat = matrix_a.clone();
+        for row in 0..mat.len() {
+            mat[row].push(vector_b[row][0]);
+        }
+        Ok(Self {matrix: mat})
+    }
+
+    // pub fn display(system: &Matrix) {
+    //     let matrix = match system {
+    //         Matrix::System(linear_system) => &linear_system.matrix,
+    //         Matrix::Vecs(vecs) => vecs,
+    //     };
+
+    //     let widths: Vec<usize> = (0..matrix[0].len())
+    //         .map(|i| matrix.iter()
+    //             .map(|row| format!("{:.2}", row[i]).len())
+    //             .max()
+    //             .unwrap_or(0))
+    //         .collect();
+    
+    //     for row in matrix {
+    //         print!("| "); // Start of row
+    //         for (i, &num) in row.iter().enumerate() {
+    //             print!("{:width$.2} ", num, width = widths[i]);
+    //         }
+    //         println!("|"); 
+    //     }
+    // }
     
     pub fn solve(&mut self) -> Vec<f64> {
         self.rref();
@@ -109,17 +132,25 @@ impl LinearSystem {
         v1.iter().zip(v2.iter()).map(|(a, b)| a * b).sum()
     }
 
-    pub fn multiply(matrix_1: &Vec<Vec<f64>>, matrix_2: &Vec<Vec<f64>>) -> Vec<Vec<f64>> {
-        if matrix_1[0].len() != matrix_2.len() {
-            panic!("Matrix sizes incompatible!");
+    pub fn multiply(matrix_1: &Vec<Vec<f64>>, matrix_2: &Vec<Vec<f64>>) -> Result<Vec<Vec<f64>>, MatrixError> {
+        let col_matrix_1 = match matrix_1.first() {
+            Some(row_1) => row_1.len(),
+            None => {
+                return Err(MatrixError::InvalidMatrix)
+            }
+        };
+        let row_matrix_2 = matrix_2.len();
+        if col_matrix_1 != row_matrix_2 {
+            return Err(MatrixError::InconsistentLengths)
         }
+
         let mut new_matrix = vec![vec![0.; matrix_2[0].len()]; matrix_1.len()];
         for col in 0..matrix_2[0].len() {
             for row in 0..matrix_1.len() {
                 new_matrix[row][col] = LinearSystem::dot(&matrix_1[row], &LinearSystem::transpose(&matrix_2)[col])
             }
         }
-        new_matrix
+        Ok(new_matrix)
     }
 
     pub fn transpose(matrix: &Vec<Vec<f64>>) -> Vec<Vec<f64>> {
@@ -127,19 +158,32 @@ impl LinearSystem {
         // println!("DEBUG: {:?}", matrix);
         for row in 0..new_matrix.len()-1 {
             for col in 0..new_matrix[row].len()-1 {
-                // println!("DEBUG: {}, {}", row, col);
                 new_matrix[col][row] = matrix[row][col];
             }
         }
         new_matrix
     }
 
-    pub fn least_squares(matrix_a: Vec<Vec<f64>>, vec_b: Vec<Vec<f64>>) -> Vec<f64> {
-        let a_t_a = LinearSystem::multiply(&LinearSystem::transpose(&matrix_a), &matrix_a);
-        let a_t_b = LinearSystem::multiply(&LinearSystem::transpose(&matrix_a), &vec_b);
-        let mut system = LinearSystem::new(a_t_a, a_t_b);
-        system.display();
-        let solution = system.solve();
-        solution
+    // pub fn least_squares(matrix_a: Vec<Vec<f64>>, vec_b: Vec<Vec<f64>>) -> Result<Vec<f64>, MatrixError> {
+    //     let a_t_a = LinearSystem::multiply(
+    //                                                                         &LinearSystem::transpose(&matrix_a),
+    //                                                                         &matrix_a);
+    //     let a_t_b = LinearSystem::multiply(
+    //                                                                         &LinearSystem::transpose(&matrix_a), 
+    //                                                                         &vec_b);
+    //     let mut system = LinearSystem::new(a_t_a, a_t_b)?;
+    //     Matrix::display(&system);
+    //     let solution = system.solve();
+    //     Ok(solution)
+    // }
+
+    // pub fn validate_matrix()
     }
+
+
+
+#[derive(Debug)]
+pub enum MatrixError {
+    InconsistentLengths,
+    InvalidMatrix,
 }
