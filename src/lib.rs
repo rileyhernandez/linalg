@@ -1,28 +1,33 @@
 
 
-fn main() {
-    let m = vec![vec![10., 15., 30., 10.],
-                 vec![5., 10., 10., 5.],
-                 vec![20., 20., 20., 20.],
-                 vec![35., 10., 100., 200.]];
-    let v = vec![15., 20., 20., 25.];
-    let mut mat = LinearSystem::new(m, v);
-    println!("Starting matrix: ");
-    mat.display();
+// fn main() {
+//     let m = vec![vec![10., 15., 30., 10.],
+//                  vec![5., 10., 10., 5.],
+//                  vec![20., 20., 20., 20.],
+//                  vec![35., 10., 100., 200.]];
+//     let v = vec![vec![15.],
+//                  vec![20.],
+//                  vec![20.],
+//                  vec![25.]];
+//     // let mut mat = LinearSystem::new(m, v);
+//     // println!("Starting matrix: ");
+//     // mat.display();
 
-    let solution = mat.solve();
-    println!("Solution: {:?}", solution);
-}
+//     let sol = LinearSystem::least_squares(m, v);
+//     println!("Sol: ");
+//     // sol.display();
+//     println!("{:?}", sol);
+// }
 
 pub struct LinearSystem {
     matrix: Vec<Vec<f64>>
 }
 
 impl LinearSystem {
-    pub fn new(matrix_a: Vec<Vec<f64>>, vector_b: Vec<f64>) -> Self {
+    pub fn new(matrix_a: Vec<Vec<f64>>, vector_b: Vec<Vec<f64>>) -> Self {
         let mut mat = matrix_a.clone();
         for row in 0..mat.len() {
-            mat[row].push(vector_b[row]);
+            mat[row].push(vector_b[row][0]);
         };
         Self {matrix: mat}
     }
@@ -102,5 +107,39 @@ impl LinearSystem {
 
     fn dot(v1: &[f64], v2: &[f64]) -> f64 {
         v1.iter().zip(v2.iter()).map(|(a, b)| a * b).sum()
+    }
+
+    pub fn multiply(matrix_1: &Vec<Vec<f64>>, matrix_2: &Vec<Vec<f64>>) -> Vec<Vec<f64>> {
+        if matrix_1[0].len() != matrix_2.len() {
+            panic!("Matrix sizes incompatible!");
+        }
+        let mut new_matrix = vec![vec![0.; matrix_2[0].len()]; matrix_1.len()];
+        for col in 0..matrix_2[0].len() {
+            for row in 0..matrix_1.len() {
+                new_matrix[row][col] = LinearSystem::dot(&matrix_1[row], &LinearSystem::transpose(&matrix_2)[col])
+            }
+        }
+        new_matrix
+    }
+
+    pub fn transpose(matrix: &Vec<Vec<f64>>) -> Vec<Vec<f64>> {
+        let mut new_matrix = vec![vec![0.; matrix.len()]; matrix[0].len()];
+        // println!("DEBUG: {:?}", matrix);
+        for row in 0..new_matrix.len()-1 {
+            for col in 0..new_matrix[row].len()-1 {
+                // println!("DEBUG: {}, {}", row, col);
+                new_matrix[col][row] = matrix[row][col];
+            }
+        }
+        new_matrix
+    }
+
+    pub fn least_squares(matrix_a: Vec<Vec<f64>>, vec_b: Vec<Vec<f64>>) -> Vec<f64> {
+        let a_t_a = LinearSystem::multiply(&LinearSystem::transpose(&matrix_a), &matrix_a);
+        let a_t_b = LinearSystem::multiply(&LinearSystem::transpose(&matrix_a), &vec_b);
+        let mut system = LinearSystem::new(a_t_a, a_t_b);
+        system.display();
+        let solution = system.solve();
+        solution
     }
 }

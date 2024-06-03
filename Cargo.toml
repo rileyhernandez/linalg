@@ -1,7 +1,12 @@
 [package]
 name = "linalg"
 version = "0.1.0"
+authors = ["Riley Hernandez <riley@caldo.tech>"]
 edition = "2021"
+
+[lib]
+name = "linalg"
+path = "src/lib.rs"
 
 [dependencies]
 nalgebra = "0.32.5"
