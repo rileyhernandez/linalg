@@ -1,4 +1,5 @@
-
+use std::num::IntErrorKind::Empty;
+use crate::MatrixError::EmptyVector;
 
 pub struct LinearSystem {
     matrix: Vec<Vec<f64>>
@@ -72,7 +73,7 @@ impl LinearSystem {
     //     }
     // }
     
-    pub fn solve(&mut self) -> Vec<f64> {
+    pub fn solve(&mut self) -> Vec<Vec<f64>> {
         self.rref();
         self.matrix.reverse();
         let mut x = vec![self.matrix[0].last().unwrap().clone()];
@@ -87,7 +88,7 @@ impl LinearSystem {
         }
         self.matrix.reverse();
         x.reverse();
-        x
+        vec![x]
     }
     
 
@@ -164,6 +165,17 @@ impl LinearSystem {
         new_matrix
     }
 
+    pub fn unpack(matrix: Vec<Vec<f64>>) -> Result<f64, MatrixError> {
+        match matrix.first() {
+            Some(inner_vec) => match inner_vec.first() {
+                Some(&value) if inner_vec.len() == 1 => Ok(value),
+                Some(_) => Err(EmptyVector),
+                None => Err(EmptyVector),
+            },
+            None => Err(EmptyVector),
+        }
+    }
+
     // pub fn least_squares(matrix_a: Vec<Vec<f64>>, vec_b: Vec<Vec<f64>>) -> Result<Vec<f64>, MatrixError> {
     //     let a_t_a = LinearSystem::multiply(
     //                                                                         &LinearSystem::transpose(&matrix_a),
@@ -186,4 +198,5 @@ impl LinearSystem {
 pub enum MatrixError {
     InconsistentLengths,
     InvalidMatrix,
+    EmptyVector
 }
