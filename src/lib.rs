@@ -1,5 +1,5 @@
-use std::num::IntErrorKind::Empty;
 use crate::MatrixError::EmptyVector;
+use std::{error::Error, fmt};
 
 pub struct LinearSystem {
     matrix: Vec<Vec<f64>>
@@ -51,44 +51,40 @@ impl LinearSystem {
         Ok(Self {matrix: mat})
     }
 
-    // pub fn display(system: &Matrix) {
-    //     let matrix = match system {
-    //         Matrix::System(linear_system) => &linear_system.matrix,
-    //         Matrix::Vecs(vecs) => vecs,
-    //     };
+    pub fn display(&self) {
+        let widths: Vec<usize> = (0..self.matrix[0].len())
+            .map(|i| self.matrix.iter()
+                .map(|row| format!("{:.2}", row[i]).len())
+                .max()
+                .unwrap_or(0))
+            .collect();
 
-    //     let widths: Vec<usize> = (0..matrix[0].len())
-    //         .map(|i| matrix.iter()
-    //             .map(|row| format!("{:.2}", row[i]).len())
-    //             .max()
-    //             .unwrap_or(0))
-    //         .collect();
-    
-    //     for row in matrix {
-    //         print!("| "); // Start of row
-    //         for (i, &num) in row.iter().enumerate() {
-    //             print!("{:width$.2} ", num, width = widths[i]);
-    //         }
-    //         println!("|"); 
-    //     }
-    // }
+        for row in &self.matrix {
+            print!("| "); // Start of row
+            for (i, &num) in row.iter().enumerate() {
+                print!("{:width$.2} ", num, width = widths[i]);
+            }
+            println!("|");
+        }
+    }
     
     pub fn solve(&mut self) -> Vec<Vec<f64>> {
-        self.rref();
-        self.matrix.reverse();
-        let mut x = vec![self.matrix[0].last().unwrap().clone()];
-        
-        for row in 1..self.matrix.len() {
-            let dot_product = LinearSystem::dot(
-                &self.matrix[row][self.matrix.len()-row..],
-                &x.iter().rev().cloned().collect::<Vec<_>>()
-            );
-            let value = self.matrix[row].last().unwrap() - dot_product;
-            x.push(value);
-        }
-        self.matrix.reverse();
-        x.reverse();
-        vec![x]
+        // self.rref();
+        // self.matrix.reverse();
+        // let mut x = vec![self.matrix[0].last().unwrap().clone()];
+        // 
+        // for row in 1..self.matrix.len() {
+        //     let dot_product = LinearSystem::dot(
+        //         &self.matrix[row][self.matrix.len()-row..],
+        //         &x.iter().rev().cloned().collect::<Vec<_>>()
+        //     )?;
+        //     let value = self.matrix[row].last().unwrap() - dot_product;
+        //     x.push(value);
+        // }
+        // self.matrix.reverse();
+        // x.reverse();
+        // vec![x]
+        vec![vec![69.]]
     }
     
 
@@ -129,9 +125,9 @@ impl LinearSystem {
         }
     }
 
-    fn dot(v1: &[f64], v2: &[f64]) -> f64 {
-        v1.iter().zip(v2.iter()).map(|(a, b)| a * b).sum()
-    }
+    // fn dot(v1: &[f64], v2: &[f64]) -> f64 {
+    //     v1.iter().zip(v2.iter()).map(|(a, b)| a * b).sum()
+    // }
 
     pub fn multiply(matrix_1: &Vec<Vec<f64>>, matrix_2: &Vec<Vec<f64>>) -> Result<Vec<Vec<f64>>, MatrixError> {
         let col_matrix_1 = match matrix_1.first() {
@@ -146,19 +142,41 @@ impl LinearSystem {
         }
 
         let mut new_matrix = vec![vec![0.; matrix_2[0].len()]; matrix_1.len()];
-        for col in 0..matrix_2[0].len() {
+        let matrix_2_transpose = LinearSystem::transpose(matrix_2);
+        for col in 0..matrix_2_transpose.len() {
             for row in 0..matrix_1.len() {
-                new_matrix[row][col] = LinearSystem::dot(&matrix_1[row], &LinearSystem::transpose(&matrix_2)[col])
+                let matrix_1_row = vec![matrix_1[row].clone()];
+                let matrix_2_col = vec![matrix_2_transpose[col].clone()];
+
+                let matrix_1_row_t = LinearSystem::transpose(&matrix_1_row);
+                let matrix_2_col_t = LinearSystem::transpose(&matrix_2_col);
+                // println!("new mat: {:?}", new_matrix);
+                // new_matrix[row][col] = matrix_1_row[0][0]*matrix_2_col[0][0];
+                // new_matrix[row][col] = LinearSystem::dot(&matrix_1_row, &matrix_2_col)?;
+                new_matrix[row][col] = LinearSystem::dot(&matrix_1_row_t, &matrix_2_col_t)?;
             }
         }
         Ok(new_matrix)
     }
 
+    pub fn dot(vector_1: &Vec<Vec<f64>>, vector_2: &Vec<Vec<f64>>) -> Result<f64, MatrixError> {
+
+        let vector_1_transpose = &LinearSystem::transpose(&vector_1.clone())[0];
+        let vector_2_transpose = &LinearSystem::transpose(&vector_2.clone())[0];
+        if vector_1_transpose.len() != vector_2_transpose.len() {
+            return Err(MatrixError::InconsistentLengths);
+        }
+        let mut product = 0.;
+        for elem in 0..vector_1_transpose.len() {
+            product += vector_1_transpose[elem]*vector_2_transpose[elem];
+        }
+        Ok(product)
+    }
+
     pub fn transpose(matrix: &Vec<Vec<f64>>) -> Vec<Vec<f64>> {
         let mut new_matrix = vec![vec![0.; matrix.len()]; matrix[0].len()];
-        // println!("DEBUG: {:?}", matrix);
-        for row in 0..new_matrix.len()-1 {
-            for col in 0..new_matrix[row].len()-1 {
+        for row in 0..matrix.len() {
+            for col in 0..matrix[row].len() {
                 new_matrix[col][row] = matrix[row][col];
             }
         }
@@ -198,5 +216,148 @@ impl LinearSystem {
 pub enum MatrixError {
     InconsistentLengths,
     InvalidMatrix,
-    EmptyVector
+    EmptyVector,
 }
+
+impl fmt::Display for MatrixError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Matrix operation failed")
+    }
+}
+impl Error for MatrixError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
+    }
+}
+
+// #[test]
+// fn create_matrix() {
+//     let m = vec![vec![10., 15., 30., 10.],
+//                  vec![5., 10., 10., 5.],
+//                  vec![20., 20., 20., 20.],
+//                  vec![35., 10., 100., 200.]];
+//     let _v = vec![vec![15.],
+//                  vec![20.],
+//                  vec![20.],
+//                  vec![25.]];
+//     let matrix = Matrix::Vecs(m);
+//     Matrix::display(&matrix);
+// }
+
+#[test]
+fn create_linear_system() {
+    let m = vec![
+                 vec![10., 15., 30., 10.],
+                 vec![5., 10., 10., 5.],
+                 vec![20., 20., 20., 20.],
+                 vec![35., 10., 100., 200.]];
+    let v = vec![
+                 vec![15.],
+                 vec![20.],
+                 vec![20.],
+                 vec![25.]];
+    let system = LinearSystem::new(m, v).expect("Couldn't construct system");
+    let intended = vec![
+        vec![10., 15., 30., 10., 15.],
+        vec![5., 10., 10., 5., 20.],
+        vec![20., 20., 20., 20., 20.],
+        vec![35., 10., 100., 200., 25.]];
+}
+
+// #[test]
+// fn rref_system() {
+//     let m = vec![vec![10., 15., 30., 10.],
+//                  vec![5., 10., 10., 5.],
+//                  vec![20., 20., 20., 20.],
+//                  vec![35., 10., 100., 200.]];
+//     let v = vec![vec![15.],
+//                  vec![20.],
+//                  vec![20.],
+//                  vec![25.]];
+//     let mut system = LinearSystem::new(m, v).expect("Couldn't construct system");
+//     println!("Starting matrix: ");
+//     system.display();
+//     system.rref();
+//     println!("RREF matrix: ");
+//     system.display();
+// }
+
+#[test]
+fn transpose_vector() {
+    let a = vec![
+        vec![1.],
+        vec![2.],
+        vec![3.],
+    ];
+    let a_t = LinearSystem::transpose(&a);
+    assert_eq!(a_t, vec![vec![1., 2., 3.]]);
+}
+
+#[test]
+fn multiply_vectors() {
+    let a = vec![
+
+        vec![1., 2., 3.]
+    ];
+    let b = vec![
+        vec![1.],
+        vec![1.],
+        vec![1.],
+    ];
+    let product = LinearSystem::multiply(&a, &b).expect("failed mult");
+    assert_eq!(product[0][0], 6.)
+}
+
+#[test]
+fn dot_vectors() {
+    let a = vec![
+        vec![1.],
+        vec![0.],
+        vec![0.],
+    ];
+    let b = vec![
+        vec![1.],
+        vec![4.],
+        vec![7.]
+    ];
+    let product = LinearSystem::dot(&a, &b).expect("Could not multiply");
+    assert_eq!(product, 1.);
+}
+
+#[test]
+fn identity_matrix() {
+    let a = vec![
+        vec![1., 0., 0.],
+        vec![0., 1., 0.],
+        vec![0., 0., 1.],
+    ];
+    let b = vec![
+        vec![1., 2., 3.],
+        vec![4., 5., 6.],
+        vec![7., 8., 9.]
+    ];
+    let product = LinearSystem::multiply(&a, &b).expect("identity test");
+    assert_eq!(product, b);
+}
+
+// fn main() {
+//     let m = vec![vec![10., 15., 30., 10.],
+//                  vec![5., 10., 10., 5.],
+//                  vec![20., 20., 20., 20.],
+//                  vec![35., 10., 100., 200.]];
+//     let v = vec![vec![15.],
+//                  vec![20.],
+//                  vec![20.],
+//                  vec![25.]];
+//     // let mut mat = LinearSystem::new(m, v);
+//     // println!("Starting matrix: ");
+//     // mat.display();
+//
+//     let matrix = Matrix::Vecs(m);
+//     Matrix::display(&matrix);
+//
+//     // let sol = LinearSystem::least_squares(m, v);
+//     // println!("Sol: ");
+//     // // sol.display();
+//     // println!("{:?}", sol);
+// }
