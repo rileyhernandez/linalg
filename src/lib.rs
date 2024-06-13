@@ -1,38 +1,13 @@
-use crate::MatrixError::EmptyVector;
+use crate::MatrixError::{EmptyVector, NonDiagonalMatrix};
 use std::{error::Error, fmt};
 
 pub struct LinearSystem {
     matrix: Vec<Vec<f64>>
 }
 
-pub enum Matrix {
-    System(LinearSystem),
-    Vecs(Vec<Vec<f64>>),
-}
+type Linear = Vec<f64>;
 
-impl Matrix {
-    pub fn display(system: &Matrix) {
-        let matrix = match system {
-            Matrix::System(linear_system) => &linear_system.matrix,
-            Matrix::Vecs(vecs) => vecs,
-        };
-
-        let widths: Vec<usize> = (0..matrix[0].len())
-            .map(|i| matrix.iter()
-                .map(|row| format!("{:.2}", row[i]).len())
-                .max()
-                .unwrap_or(0))
-            .collect();
-    
-        for row in matrix {
-            print!("| "); // Start of row
-            for (i, &num) in row.iter().enumerate() {
-                print!("{:width$.2} ", num, width = widths[i]);
-            }
-            println!("|"); 
-        }
-    }
-}
+struct Lin(Vec<f64>);
 
 impl LinearSystem {
     pub fn new(matrix_a: Vec<Vec<f64>>, vector_b: Vec<Vec<f64>>) -> Result<Self, &'static str> {
@@ -68,23 +43,39 @@ impl LinearSystem {
         }
     }
     
-    pub fn solve(&mut self) -> Vec<Vec<f64>> {
-        // self.rref();
-        // self.matrix.reverse();
-        // let mut x = vec![self.matrix[0].last().unwrap().clone()];
-        // 
-        // for row in 1..self.matrix.len() {
-        //     let dot_product = LinearSystem::dot(
-        //         &self.matrix[row][self.matrix.len()-row..],
-        //         &x.iter().rev().cloned().collect::<Vec<_>>()
-        //     )?;
-        //     let value = self.matrix[row].last().unwrap() - dot_product;
-        //     x.push(value);
-        // }
-        // self.matrix.reverse();
-        // x.reverse();
-        // vec![x]
-        vec![vec![69.]]
+    pub fn solve(&mut self) -> Result<Vec<Vec<f64>>, MatrixError> {
+        self.rref();
+        // let matrix = self.matrix;
+        // let x = LinearSystem::solve_diagonal_matrix(matrix).expect("Failed to solve diagonal matrix");
+
+        for row in 0..self.matrix.len() {
+            for column in 0..self.matrix[0].len() {
+                if row > column && self.matrix[row][column] != 0.{
+                    return Err(NonDiagonalMatrix)
+                }
+            }
+        }
+
+        let n = self.matrix.len();
+        let m = self.matrix[0].len();
+        let mut x = vec![0.; n];
+
+        // let test = matrix[0][0..2];
+        // println!("n: {:?}", n);
+        // println!("m: {:?}", m);
+        x[n-1] = self.matrix[n-1][m-1];
+        for i in (0..n-1).rev() {
+            // println!("i: {:?}", i);
+            let mut a = vec![0.; m-i-2];
+            let mut b = vec![0.; m-i-2];
+            a.clone_from_slice(&self.matrix[i][i+1..m-1]);
+            b.clone_from_slice(&x[i+1..m-1]);
+            // println!("a: {:?}, b: {:?}", a, b);
+            x[i] = self.matrix[i][m-1] - LinearSystem::dot(&LinearSystem::transpose(&vec![a]), &LinearSystem::transpose(&vec![b])).expect("Failed to dot product");
+            // x[i] = vec![ &matrix[i][m-1] LinearSystem::dot() ];
+        }
+        Ok(vec![x])
+        // vec![vec![420.69]]
     }
     
 
@@ -208,7 +199,53 @@ impl LinearSystem {
     // }
 
     // pub fn validate_matrix()
+
+    pub fn solve_diagonal_matrix(matrix: Vec<Vec<f64>>) -> Result<Vec<Vec<f64>>, MatrixError> {
+        /// matrix of size: n x m
+        /// and form: | a_00 a_01 a_02 a_03 | a_04 |
+        ///           | a_10 a_11 a_12 a_13 | a_14 |
+        ///           | a_20 a_21 a_22 a_23 | a_24 |
+        ///           | a_30 a_31 a_32 a_33 | a_34 |
+        /// for x[0..n-2] : x[i] = a[i][m-1] - a[i][i+1..m-1] *. x[i+1..m-1]
+        /// and x[n-1] = a[n-1][m-1]
+        ///
+        /// let matrix = vec![
+        //         vec![1., 1., 1., 4.,],
+        //         vec![0., 1., 1., 3.,],
+        //         vec![0., 0., 1., 2.,],
+        //     ];
+
+        for row in 0..matrix.len() {
+            for column in 0..matrix[0].len() {
+                if row > column && matrix[row][column] != 0.{
+                    return Err(NonDiagonalMatrix)
+                }
+            }
+        }
+
+        let n = matrix.len();
+        let m = matrix[0].len();
+        let mut x = vec![0.; n];
+
+        // let test = matrix[0][0..2];
+        // println!("n: {:?}", n);
+        // println!("m: {:?}", m);
+        x[n-1] = matrix[n-1][m-1];
+        for i in (0..n-1).rev() {
+            // println!("i: {:?}", i);
+            let mut a = vec![0.; m-i-2];
+            let mut b = vec![0.; m-i-2];
+            a.clone_from_slice(&matrix[i][i+1..m-1]);
+            b.clone_from_slice(&x[i+1..m-1]);
+            // println!("a: {:?}, b: {:?}", a, b);
+            x[i] = matrix[i][m-1] - LinearSystem::dot(&LinearSystem::transpose(&vec![a]), &LinearSystem::transpose(&vec![b])).expect("Failed to dot product");
+            // x[i] = vec![ &matrix[i][m-1] LinearSystem::dot() ];
+        }
+        Ok(vec![x])
+
+        // Ok(vec![vec![420.69]])
     }
+}
 
 
 
@@ -217,6 +254,7 @@ pub enum MatrixError {
     InconsistentLengths,
     InvalidMatrix,
     EmptyVector,
+    NonDiagonalMatrix,
 }
 
 impl fmt::Display for MatrixError {
@@ -340,24 +378,64 @@ fn identity_matrix() {
     assert_eq!(product, b);
 }
 
-// fn main() {
-//     let m = vec![vec![10., 15., 30., 10.],
-//                  vec![5., 10., 10., 5.],
-//                  vec![20., 20., 20., 20.],
-//                  vec![35., 10., 100., 200.]];
-//     let v = vec![vec![15.],
-//                  vec![20.],
-//                  vec![20.],
-//                  vec![25.]];
-//     // let mut mat = LinearSystem::new(m, v);
-//     // println!("Starting matrix: ");
-//     // mat.display();
-//
-//     let matrix = Matrix::Vecs(m);
-//     Matrix::display(&matrix);
-//
-//     // let sol = LinearSystem::least_squares(m, v);
-//     // println!("Sol: ");
-//     // // sol.display();
-//     // println!("{:?}", sol);
-// }
+#[test]
+fn nondiagonal() {
+    let matrix_1 = vec![
+        vec![1., 1., 1., 4.,],
+        vec![1., 1., 1., 3.,],
+        vec![0., 0., 1., 2.,],
+    ];
+    let matrix_2 = vec![
+        vec![1., 1., 1., 4.,],
+        vec![0., 1., 1., 3.,],
+        vec![0., 5., 1., 2.,],
+    ];
+    assert!(LinearSystem::solve_diagonal_matrix(matrix_1).is_err());
+    assert!(LinearSystem::solve_diagonal_matrix(matrix_2).is_err());
+
+}
+#[test]
+fn solve_diagonal_matrix() -> Result<(), Box<dyn Error>>{
+    let matrix_1 = vec![
+        vec![1., 1., 1., 4.,],
+        vec![0., 1., 1., 3.,],
+        vec![0., 0., 1., 2.,],
+    ];
+    assert_eq!(LinearSystem::solve_diagonal_matrix(matrix_1)?, vec![[1., 1., 2.]]);
+
+    let matrix_2 = vec![
+        vec![1., 2., 4., 5., 1.],
+        vec![0., 1., 3., 9., 1.],
+        vec![0., 0., 1., 1., 1.],
+        vec![0., 0., 0., 1., 1.]
+    ];
+    assert_eq!(LinearSystem::solve_diagonal_matrix(matrix_2)?, vec![[12., -8., 0., 1.]]);
+
+    Ok(())
+}
+
+#[test]
+fn solve_matrix() -> Result<(), Box<dyn Error>>{
+    let matrix_1 = vec![
+        vec![1., 1., 1.],
+        vec![0., 1., 1.],
+        vec![0., 0., 1.],
+    ];
+    let vec_1 = vec![
+        vec![4.],
+        vec![3.],
+        vec![2.]
+    ];
+    let mut system_1 = LinearSystem::new(matrix_1, vec_1)?;
+    assert_eq!(LinearSystem::solve(&mut system_1)?, vec![[1., 1., 2.]]);
+
+    let matrix_2 = vec![
+        vec![1., 2., 4., 5., 1.],
+        vec![0., 1., 3., 9., 1.],
+        vec![0., 0., 1., 1., 1.],
+        vec![0., 0., 0., 1., 1.]
+    ];
+    assert_eq!(LinearSystem::solve_diagonal_matrix(matrix_2)?, vec![[12., -8., 0., 1.]]);
+
+    Ok(())
+}
